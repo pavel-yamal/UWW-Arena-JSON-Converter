@@ -65,6 +65,23 @@ REST-ответ — это то, что лежит в базе. Тикающее
 **Это предположение, а не факт**: в спецификации нет описания ответов. Поэтому сейчас сервис
 берёт таймер из REST, а Mercure не подключён.
 
+## Самый быстрый способ: посмотреть в код вашей Arena
+
+Arena у вас и так запущена в Docker, а значит, весь её код (Symfony/PHP) лежит в контейнере
+`php-fpm`. Скрипт [`tools/inspect_arena.sh`](../tools/inspect_arena.sh) **только читает** код и собирает в
+`arena_inspect.txt`: настройки хаба Mercure, где и с какими топиками публикуются события, контроллер
+`mercuretoken`, поля таймера и схватки, группы сериализации, настройки OAuth/api_key, подписки
+`EventSource` во фронтенде. Секреты (`*KEY`, `*SECRET`, `*PASSWORD`, `*TOKEN`) скрываются.
+
+```bash
+# в папке с docker-compose.yaml Arena (Linux/macOS, на Windows — в WSL или Git Bash)
+curl -O https://raw.githubusercontent.com/pavel-yamal/UWW-Arena-JSON-Converter/claude/relaxed-newton-0357dz/tools/inspect_arena.sh
+sh inspect_arena.sh
+```
+
+Пришлите `arena_inspect.txt` — по нему подписка на Mercure пишется точно.
+Если в разделе `PHP ENCODED?` есть файлы — код зашифрован, тогда остаётся путь через DevTools ниже.
+
 ## Как проверить на реальной Arena (5 минут)
 
 1. **Есть ли живое время в REST.** Во время идущей схватки дважды с интервалом в пару секунд:
