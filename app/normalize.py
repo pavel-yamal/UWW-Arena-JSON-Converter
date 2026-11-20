@@ -7,8 +7,12 @@ dot-paths; the first non-empty one wins.
 from __future__ import annotations
 
 import json
+import math
+import re
 from pathlib import Path
 from typing import Any
+
+from .sanitize import clean, clean_score, flag
 
 DEFAULT_MAPPING = Path(__file__).with_name("mapping.default.json")
 
@@ -42,8 +46,11 @@ def pick(obj: Any, paths: list[str], n: int | None = None) -> Any:
         if n is not None:
             p = p.replace("{n}", str(n))
         v = get_path(obj, p)
-        if v not in (None, "", [], {}):
-            return v
+        if v in (None, "", [], {}):
+            continue
+        if isinstance(v, str) and not clean(v):
+            continue  # "null", "  ", "\u200b" … -> try the next path
+        return v
     return None
 
 
@@ -58,14 +65,18 @@ def _scalar(v: Any) -> Any:
 
 
 def format_timer(v: Any, unit: str = "s") -> str:
-    if v is None:
+    if v is None or isinstance(v, bool):
         return ""
-    if isinstance(v, str) and not v.replace(".", "", 1).isdigit():
-        return v  # already "2:15" or similar
+    if isinstance(v, str):
+        v = clean(v)
+        if re.fullmatch(r"\d{1,3}:\d{2}", v):
+            return v  # already "2:15"
     try:
         secs = float(v)
     except (TypeError, ValueError):
-        return str(v)
+        return ""
+    if not math.isfinite(secs):
+        return ""
     if unit == "ms":
         secs /= 1000
     secs = max(0, int(secs))
@@ -87,8 +98,12 @@ def _winner_side(f: dict, mapping: dict, fighter_ids: dict[int, Any]) -> int | N
             if pick(f, [f"fighter{n}.isWinner", f"fighter{n}.winner", f"fighter{n}IsWinner"]) is True:
                 return n
         return None
+    if isinstance(w, bool):  # True == 1 in Python: must not mean "red"
+        return None
     if isinstance(w, dict):
         w = w.get("id", w.get("fighterId"))
+        if w is None or isinstance(w, bool):
+            return None
     if isinstance(w, str):
         lw = w.lower()
         if lw in ("red", "r", "1", "fighter1"):
@@ -103,7 +118,31 @@ def _winner_side(f: dict, mapping: dict, fighter_ids: dict[int, Any]) -> int | N
     return None
 
 
-def normalize_fight(mat: dict, fight: dict | None, mapping: dict, timer_unit: str = "s") -> dict:
+TEXT_KEYS_SCORE = ("red_score", "blue_score", "red_cp", "blue_cp")
+
+
+def normalize_fight(mat: dict, fight: dict | None, mapping: dict, timer_unit: str = "s") -> dict[str, str]:
+    """Normalized row; every value is a clean string ("" when unknown)."""
+    row = _normalize(mat, fight, mapping, timer_unit)
+    out: dict[str, str] = {}
+    for k, v in row.items():
+        if k == "has_fight":
+            out[k] = "1" if v else "0"
+        elif k in TEXT_KEYS_SCORE and row["has_fight"]:
+            out[k] = clean_score(v)
+        else:
+            out[k] = clean(v)
+    for side in SIDES.values():
+        out[f"{side}_flag"] = flag(out[f"{side}_country"])
+    if out["winner_side"]:
+        w = out["winner_side"]
+        out["winner_name"], out["winner_country"] = out[f"{w}_name"], out[f"{w}_country"]
+    if not out["weight_category"] and out["weight"]:
+        out["weight_category"] = f"{out['weight']} kg"
+    return out
+
+
+def _normalize(mat: dict, fight: dict | None, mapping: dict, timer_unit: str) -> dict:
     row: dict[str, Any] = {
         "mat": mat.get("name") or mat.get("number") or mat.get("id"),
         "mat_id": mat.get("id"),
@@ -138,7 +177,7 @@ def normalize_fight(mat: dict, fight: dict | None, mapping: dict, timer_unit: st
         ids[n] = pick(fight, mapping["fighter_id"], n)
         last = _scalar(pick(fight, mapping["last_name"], n)) or ""
         first = _scalar(pick(fight, mapping["first_name"], n)) or ""
-        full = _scalar(pick(fight, mapping["full_name"], n)) or " ".join(x for x in (last, first) if x)
+        full = _scalar(pick(fight, mapping["full_name"], n)) or " ".join(clean(x) for x in (last, first) if clean(x))
         row[f"{side}_name"] = full
         row[f"{side}_last_name"] = last
         row[f"{side}_first_name"] = first
@@ -146,10 +185,7 @@ def normalize_fight(mat: dict, fight: dict | None, mapping: dict, timer_unit: st
         row[f"{side}_country_name"] = _scalar(pick(fight, mapping["country_name"], n)) or ""
         row[f"{side}_score"] = _num(pick(fight, mapping["score"], n))
         row[f"{side}_cp"] = _num(pick(fight, mapping["classification_points"], n))
-        if row[f"{side}_country"]:
-            row[f"{side}_flag"] = f"{row[f'{side}_country']}.png"
-        else:
-            row[f"{side}_flag"] = ""
+        row[f"{side}_flag"] = ""
 
     w = _winner_side(fight, mapping, ids)
     row["winner_side"] = SIDES.get(w, "") if w else ""

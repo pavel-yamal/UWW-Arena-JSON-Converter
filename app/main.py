@@ -17,15 +17,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import re
 import time
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from .arena import ArenaClient
 from .config import Settings
 from .normalize import load_mapping, normalize_fight
+from .sanitize import ascii_key
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("vmix")
@@ -66,12 +67,20 @@ async def refresh_once() -> None:
         log.info("event %s, mats: %s", state.event_id, [m.get("name") for m in state.mats])
 
     fights = await asyncio.gather(*(client.open_fight(str(m["id"])) for m in state.mats), return_exceptions=True)
+    previous = {r["mat_id"]: r for r in state.rows}
     rows = []
     for mat, fight in zip(state.mats, fights):
         if isinstance(fight, Exception):
+            # one failed request must not blank the mat on air: keep its last row
             log.warning("mat %s: %s", mat.get("name"), fight)
-            fight = None
-        rows.append(normalize_fight(mat, fight, mapping, settings.timer_unit))
+            old = previous.get(str(mat.get("id")))
+            rows.append(old or normalize_fight(mat, None, mapping, settings.timer_unit))
+            continue
+        try:
+            rows.append(normalize_fight(mat, fight, mapping, settings.timer_unit))
+        except Exception:
+            log.exception("mat %s: cannot normalize fight", mat.get("name"))
+            rows.append(previous.get(str(mat.get("id"))) or normalize_fight(mat, None, mapping, settings.timer_unit))
     state.rows = rows
     state.updated_at = time.time()
 
@@ -98,7 +107,11 @@ async def lifespan(_: FastAPI):
     await client.close()
 
 
-app = FastAPI(title="UWW Arena -> vMix", lifespan=lifespan)
+class UTF8JSONResponse(JSONResponse):
+    media_type = "application/json; charset=utf-8"
+
+
+app = FastAPI(title="UWW Arena -> vMix", lifespan=lifespan, default_response_class=UTF8JSONResponse)
 
 
 @app.get("/vmix/rows")
@@ -106,11 +119,17 @@ async def vmix_rows() -> list[dict]:
     return state.rows
 
 
-def _prefix(row: dict, index: int, key: str) -> str:
-    if key == "index":
-        return f"mat{index}"
-    name = re.sub(r"\W+", "_", str(row.get("mat") or index)).strip("_")
-    return f"mat{name}" if name[:1].isdigit() else name
+def _prefix(row: dict, index: int, key: str, used: set[str]) -> str:
+    """Column prefix: ASCII only, never starts with a digit, never repeats."""
+    name = "" if key == "index" else ascii_key(row.get("mat", ""))
+    if not name:
+        name = f"mat{index}"
+    elif name[0].isdigit():
+        name = f"mat{name}"
+    if name in used:
+        name = f"{name}_{index}"
+    used.add(name)
+    return name
 
 
 @app.get("/vmix")
@@ -121,9 +140,13 @@ async def vmix_flat(key: str = "") -> list[dict]:
     key=index -> prefix by position ("mat1_", "mat2_", …)
     """
     key = key or settings.vmix_key
-    flat: dict[str, Any] = {"updated_at": state.updated_at, "arena_ok": state.last_error is None}
+    flat: dict[str, str] = {
+        "updated_at": time.strftime("%H:%M:%S", time.localtime(state.updated_at)) if state.updated_at else "",
+        "arena_ok": "1" if state.updated_at and state.last_error is None else "0",
+    }
+    used: set[str] = set()
     for i, row in enumerate(state.rows, start=1):
-        p = _prefix(row, i, key)
+        p = _prefix(row, i, key, used)
         for k, v in row.items():
             flat[f"{p}_{k}"] = v
     return [flat]

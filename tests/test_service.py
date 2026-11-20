@@ -69,10 +69,10 @@ def test_refresh_builds_rows(mocked):
     assert a["weight_category"] == "FS 65 kg"
     assert a["red_name"] == "IVANOV Ivan" and a["red_country"] == "AIN"
     assert a["blue_name"] == "SMITH John" and a["blue_country"] == "USA"
-    assert (a["red_score"], a["blue_score"]) == (7, 3)
+    assert (a["red_score"], a["blue_score"]) == ("7", "3")
     assert a["winner_side"] == "red" and a["winner_name"] == "IVANOV Ivan"
     assert a["victory_type"] == "VPO1"
-    assert b["has_fight"] is False and b["red_name"] == ""
+    assert b["has_fight"] == "0" and b["red_name"] == "" and a["has_fight"] == "1"
     assert set(a) == set(b)  # stable columns for vMix
 
 
@@ -96,8 +96,106 @@ def test_timer_format():
 def test_flat_all_mats_one_row(mocked):
     asyncio.run(main.refresh_once())
     (row,) = asyncio.run(main.vmix_flat())
-    assert row["arena_ok"] is True
+    assert row["arena_ok"] == "1"
     assert row["A_red_name"] == "IVANOV Ivan" and row["A_timer"] == "1:35"
-    assert row["B_has_fight"] is False
+    assert row["B_has_fight"] == "0"
     (row,) = asyncio.run(main.vmix_flat(key="index"))
     assert row["mat1_blue_country"] == "USA" and "mat2_red_score" in row
+
+
+def _all_clean_strings(d):
+    for k, v in d.items():
+        assert isinstance(v, str), (k, v)
+        assert v == v.strip() and "  " not in v, (k, v)
+        assert not any(ord(c) < 32 or c in "\u200b\ufeff\ufffd\x7f" for c in v), (k, v)
+        assert v.lower() not in ("null", "none", "true", "false", "undefined", "nan"), (k, v)
+        assert "&amp;" not in v and "Ð" not in v and "<b>" not in v, (k, v)
+
+
+NASTY = {
+    "id": None, "fightNumber": None, "status": None, "currentRound": {"name": None}, "timer": "NaN",
+    "sportEventWeightCategory": {"name": "FS\n65 kg\t", "maxWeight": 65.0},
+    "fighter1": {"id": 1, "displayName": "  IVANOV\u200b  Ivan\x00 ", "teamAlternateName": "null",
+                 "athlete": {"team": {"alternateName": "kaz"}}},
+    "fighter2": {"id": 2, "athlete": {"personFullName": "Ð˜Ð²Ð°Ð½Ð¾Ð² Ð\x9dÐ¸ÐºÐ¾Ð»Ð°Ð¹",
+                                       "team": {"alternateName": "RUS", "name": "Tom &amp;amp; Jerry"}}},
+    "fighter1Score": None, "fighter2Score": True, "fighter1RankingPoint": 3.0, "fighter2RankingPoint": "-1",
+    "winnerFighter": True, "victoryType": {"id": None}, "roundName": ["1/8", None],
+}
+
+
+def test_nasty_payload_is_air_safe():
+    r = normalize_fight({"id": None, "name": None}, NASTY, load_mapping())
+    _all_clean_strings(r)
+    assert r["red_name"] == "IVANOV Ivan"
+    assert r["red_country"] == "kaz" and r["red_flag"] == "KAZ.png"   # skipped "null", took next path
+    assert r["blue_name"] == "Иванов Николай"                         # mojibake repaired
+    assert r["blue_country_name"] == "Tom & Jerry"
+    assert (r["red_score"], r["blue_score"], r["red_cp"], r["blue_cp"]) == ("0", "0", "3", "0")
+    assert r["weight_category"] == "FS 65 kg" and r["weight"] == "65"
+    assert r["fight_round"] == "1/8" and r["timer"] == "" and r["winner_side"] == ""
+    assert r["fight_number"] == "" and r["status"] == "" and r["period"] == ""
+
+
+def test_legit_names_untouched():
+    m = load_mapping()
+    for name in ("João DA SILVA", "MÜLLER Jürgen", "ÖZTÜRK Çağrı", "ДЖАЛАЛОВ Ғани", "ÑANDÚ José", "O'NEIL Mary-Ann"):
+        r = normalize_fight({"id": "m", "name": "A"}, {"fighter1": {"displayName": name}}, m)
+        assert r["red_name"] == name
+
+
+def test_flat_document_is_air_safe(mocked, monkeypatch):
+    global FIGHT_A
+    monkeypatch.setitem(FIGHT_A, "fighter1", NASTY["fighter1"])
+    asyncio.run(main.refresh_once())
+    (doc,) = asyncio.run(main.vmix_flat())
+    _all_clean_strings(doc)
+
+
+def test_mat_prefixes_safe_and_unique():
+    rows = [{"mat": "Ковёр 1"}, {"mat": "1"}, {"mat": "A"}, {"mat": "a "}, {"mat": None}, {"mat": "A"}]
+    used: set = set()
+    got = [main._prefix(r, i, "name", used) for i, r in enumerate(rows, 1)]
+    assert got == ["mat1", "mat1_2", "A", "a", "mat5", "A_6"]
+
+
+def test_failed_mat_keeps_last_row(mocked, monkeypatch):
+    asyncio.run(main.refresh_once())
+    before = main.state.rows[0]
+
+    async def boom(mat_id):
+        raise httpx.ReadTimeout("timeout")
+
+    monkeypatch.setattr(mocked, "open_fight", boom)
+    asyncio.run(main.refresh_once())
+    assert main.state.rows[0] == before and before["red_name"] == "IVANOV Ivan"
+
+
+def test_fuzz_never_crashes_never_leaks_junk():
+    import random
+
+    rnd = random.Random(42)
+    junk = [None, True, False, 0, -3, 2.5, float("nan"), float("inf"), "", " ", "null", "None", "\x00\x07",
+            "​", "﻿", "�", "&lt;b&gt;", "a\r\nb", "\t", "ÐŸÑ€Ð¸Ð²ÐµÑ‚", [], {}, [None, "x"],
+            {"name": None}, {"id": True}, {"alternateName": " RUS "}, "12:34", "999999", "-5", "1e309"]
+    m = load_mapping()
+    paths = sorted({p.replace("{n}", str(n)) for ps in m.values() for p in ps for n in (1, 2)})
+
+    def put(d, path, v):
+        parts = path.split(".")
+        for part in parts[:-1]:
+            if part.isdigit():
+                return
+            nxt = d.get(part)
+            if not isinstance(nxt, dict):
+                nxt = d[part] = {}
+            d = nxt
+        if not parts[-1].isdigit():
+            d[parts[-1]] = v
+
+    for _ in range(3000):
+        fight = {}
+        for p in rnd.sample(paths, rnd.randint(1, len(paths))):
+            put(fight, p, rnd.choice(junk))
+        mat = {"id": rnd.choice(junk), "name": rnd.choice(junk)}
+        _all_clean_strings(normalize_fight(mat, fight, m, rnd.choice(["s", "ms"])))
