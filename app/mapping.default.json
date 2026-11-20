@@ -1,0 +1,100 @@
+{
+  "_comment": "Пути к полям в объекте схватки Arena (dot-path, индексы массивов: rounds.0.x). Для каждого поля берётся первый непустой путь. {n} = 1 (красный) или 2 (синий). Проверьте реальный ответ через /raw/fight/<matId> и поправьте.",
+
+  "fight_id": ["id"],
+  "fight_number": ["fightNumber", "number", "matFightNumber"],
+  "status": ["status", "fightStatus"],
+  "round": ["currentRound", "round", "period", "currentPeriod"],
+
+  "timer": ["timer", "time", "clock", "currentTime", "roundTime", "fightTime", "elapsedTime", "remainingTime", "duration"],
+
+  "weight_category": [
+    "sportEventWeightCategory.name",
+    "sportEventWeightCategory.fullName",
+    "weightCategory.name",
+    "weightCategoryName",
+    "sportEventWeightCategoryName"
+  ],
+  "weight": [
+    "sportEventWeightCategory.maxWeight",
+    "sportEventWeightCategory.weight",
+    "weightCategory.maxWeight",
+    "maxWeight"
+  ],
+  "sport": [
+    "sportEventWeightCategory.sportAlternateName",
+    "sportEventWeightCategory.sport",
+    "sportEventWeightCategory.sportName",
+    "sport"
+  ],
+  "fight_round_name": ["roundName", "fightRoundName", "stage", "bracketRound"],
+
+  "fighter_id": [
+    "fighter{n}.id",
+    "fighter{n}Id"
+  ],
+  "full_name": [
+    "fighter{n}.displayName",
+    "fighter{n}.fullName",
+    "fighter{n}.personFullName",
+    "fighter{n}.athlete.personFullName",
+    "fighter{n}.athlete.person.fullName",
+    "fighter{n}.athlete.fullName",
+    "fighter{n}FullName",
+    "fighter{n}Name",
+    "fighter{n}DisplayName"
+  ],
+  "last_name": [
+    "fighter{n}.lastName",
+    "fighter{n}.familyName",
+    "fighter{n}.personLastName",
+    "fighter{n}.athlete.personLastName",
+    "fighter{n}.athlete.person.lastName",
+    "fighter{n}.athlete.lastName",
+    "fighter{n}LastName"
+  ],
+  "first_name": [
+    "fighter{n}.firstName",
+    "fighter{n}.givenName",
+    "fighter{n}.personFirstName",
+    "fighter{n}.athlete.personFirstName",
+    "fighter{n}.athlete.person.firstName",
+    "fighter{n}.athlete.firstName",
+    "fighter{n}FirstName"
+  ],
+  "country": [
+    "fighter{n}.teamAlternateName",
+    "fighter{n}.athlete.team.alternateName",
+    "fighter{n}.athlete.teamAlternateName",
+    "fighter{n}.team.alternateName",
+    "fighter{n}.countryCio",
+    "fighter{n}.athlete.person.countryCio.alternateName",
+    "fighter{n}.athlete.countryCio.alternateName",
+    "fighter{n}TeamAlternateName",
+    "fighter{n}Team",
+    "fighter{n}Country"
+  ],
+  "country_name": [
+    "fighter{n}.teamName",
+    "fighter{n}.athlete.team.name",
+    "fighter{n}.team.name",
+    "fighter{n}.athlete.person.countryCio.name",
+    "fighter{n}TeamName"
+  ],
+  "score": [
+    "fighter{n}Score",
+    "fighter{n}TechnicalPoints",
+    "fighter{n}Points",
+    "fighter{n}.score",
+    "fighter{n}.technicalPoints",
+    "score{n}"
+  ],
+  "classification_points": [
+    "fighter{n}RankingPoint",
+    "fighter{n}ClassificationPoints",
+    "fighter{n}.rankingPoint"
+  ],
+
+  "winner": ["winnerFighter", "winner", "winnerId", "winnerFighterId", "winnerSide"],
+  "victory_type": ["victoryType", "victoryTypeName", "victoryTypeIdentifier", "victory"]
+}
