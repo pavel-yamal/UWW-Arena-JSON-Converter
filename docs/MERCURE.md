@@ -30,6 +30,25 @@
 То есть табло Arena получает данные **не опросом REST**, а подпиской на Mercure.
 Схем событий (какие топики, какие поля) в спецификации нет — их нужно посмотреть на живой системе.
 
+## Что нашлось в официальных источниках (ноябрь 2026)
+
+| Источник | Что подтверждает |
+|---|---|
+| [arena.uww.org/api/doc](http://arena.uww.org/api/doc) | официальная документация API — **та же спецификация 1.7.1.1**, что у нас: только пути, **без схем ответов и без описания событий Mercure** |
+| [docker-compose.yaml Arena](https://github.com/unitedworldwrestling/arena-public/blob/master/Resources/docker-compose.yaml) | Mercure-хаб — штатная часть Arena: сервис `caddy` с образом `arena-mercure` и ключами `MERCURE_PUBLISHER_JWT_KEY` / `MERCURE_SUBSCRIBER_JWT_KEY`. Наружу порт хаба не проброшен — доступ, по-видимому, через nginx Arena на `:8080` (проверить в DevTools) |
+| [oauth2-arena](https://github.com/unitedworldwrestling/oauth2-arena) (официальный клиент UWW) | токен: `POST /oauth/v2/token`, grant `https://arena.uww.io/grants/api_key` с параметром `api_key`, scope `read` → `Bearer`. **Сервис переведён на эту схему** (`ARENA_API_KEY`) |
+| [README arena-public](https://github.com/unitedworldwrestling/arena-public) | табло (UWWTiming) и Live Graphics (LGTV) — отдельные Windows-приложения; интеграция через REST описана только в вебинаре «REST API Interface» (видео) |
+| [Issue #286](https://github.com/unitedworldwrestling/arena-public/issues/286) | ровно наш вопрос: «использует ли LGTV REST, с каким интервалом опроса, есть ли WebSocket/SSE, какие события у старта/счёта/завершения схватки» — **ответа от UWW нет** |
+| [Issue #258](https://github.com/unitedworldwrestling/arena-public/issues/258) | разработчик UWW: страницы `/onvenue` получают данные AJAX-запросами — их можно подсмотреть в DevTools |
+| `GET https://arena.uww.org/api/json/arena/current-event` | отвечает `204 No Content`, когда текущего турнира нет/несколько; без токена данные — `401` |
+
+**Итог:** публичного описания топиков и формата сообщений Mercure **нет**. Единственный надёжный
+путь — посмотреть трафик табло/onvenue на своей Arena (шаги ниже) или спросить UWW в
+[трекере](https://github.com/unitedworldwrestling/arena-public/issues) (можно добавиться в #286).
+
+> Безопасность: в стандартном `docker-compose.yaml` Arena ключ хаба —
+> `!ChangeThisMercureHubJWTSecretKey!!`. На турнире в общей сети его стоит заменить.
+
 ## Почему вопрос встаёт именно из-за таймера
 
 | Данные | Как часто меняются | Хватает ли REST-опроса раз в 1 с |

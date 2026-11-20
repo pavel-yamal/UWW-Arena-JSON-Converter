@@ -199,3 +199,30 @@ def test_fuzz_never_crashes_never_leaks_junk():
             put(fight, p, rnd.choice(junk))
         mat = {"id": rnd.choice(junk), "name": rnd.choice(junk)}
         _all_clean_strings(normalize_fight(mat, fight, m, rnd.choice(["s", "ms"])))
+
+
+def test_api_key_grant_as_in_official_client(monkeypatch):
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oauth/v2/token":
+            from urllib.parse import parse_qs
+            seen.update({k: v[0] for k, v in parse_qs(request.content.decode()).items()})
+            return httpx.Response(200, json={"access_token": "tok2", "expires_in": 60})
+        assert request.headers["authorization"] == "Bearer tok2"
+        return httpx.Response(200, json={"version": "1.7.1.1"})
+
+    monkeypatch.setenv("ARENA_API_KEY", "KEY")
+    s = Settings(arena_url="http://arena", arena_client_id="cid", arena_client_secret="sec")
+    c = ArenaClient(s)
+    c._http = httpx.AsyncClient(base_url="http://arena", transport=httpx.MockTransport(handler))
+    assert asyncio.run(c.get("/api/json/arena/version")) == {"version": "1.7.1.1"}
+    assert seen == {"grant_type": "https://arena.uww.io/grants/api_key", "client_id": "cid",
+                    "client_secret": "sec", "api_key": "KEY", "scope": "read"}
+
+
+def test_current_event_204_is_none():
+    # arena.uww.org answers 204 No Content when there is no single current event
+    c = ArenaClient(Settings(arena_url="http://arena"))
+    c._http = httpx.AsyncClient(base_url="http://arena", transport=httpx.MockTransport(lambda r: httpx.Response(204)))
+    assert asyncio.run(c.current_event_id()) is None

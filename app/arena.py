@@ -1,8 +1,11 @@
 """HTTP client for the UWW Arena REST API (OpenAPI "Arena API" 1.7.x).
 
-Auth: the spec declares a global `client_credentials` OAuth2 security requirement.
-Arena is a Symfony app; its token endpoint is configurable (ARENA_TOKEN_PATH).
-If ARENA_CLIENT_ID is empty, requests are sent without auth (or with a static
+Auth (per UWW's official client github.com/unitedworldwrestling/oauth2-arena):
+  POST /oauth/v2/token  grant_type=https://arena.uww.io/grants/api_key
+                        client_id, client_secret, api_key, scope=read
+  -> {"access_token": ..., "expires_in": ...}, then "Authorization: Bearer <token>".
+Without ARENA_API_KEY the standard client_credentials grant is used.
+With neither client id nor api key, requests go without auth (or with a static
 ARENA_API_TOKEN, if given).
 """
 from __future__ import annotations
@@ -33,16 +36,24 @@ class ArenaClient:
         await self._http.aclose()
 
     # ---------------------------------------------------------------- auth
+    def _uses_oauth(self) -> bool:
+        return bool(self.s.arena_client_id or self.s.arena_api_key)
+
+    def _token_request(self) -> dict[str, str]:
+        data = {"grant_type": self.s.arena_grant_type, "scope": self.s.arena_scope}
+        if self.s.arena_client_id:
+            data["client_id"] = self.s.arena_client_id
+            data["client_secret"] = self.s.arena_client_secret
+        if self.s.arena_api_key:
+            data["api_key"] = self.s.arena_api_key
+        return {k: v for k, v in data.items() if v}
+
     async def _ensure_token(self) -> None:
-        if not self.s.arena_client_id:
+        if not self._uses_oauth():
             return
         if self._token and time.time() < self._token_expires - 30:
             return
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": self.s.arena_client_id,
-            "client_secret": self.s.arena_client_secret,
-        }
+        data = self._token_request()
         r = await self._http.post(self.s.arena_token_path, data=data)
         if r.status_code >= 400:
             # some OAuth servers only accept GET with query params
@@ -65,7 +76,7 @@ class ArenaClient:
         path = path.replace("{_format}", "json")
         await self._ensure_token()
         r = await self._http.get(path, headers=self._headers())
-        if r.status_code == 401 and self.s.arena_client_id:
+        if r.status_code == 401 and self._uses_oauth():
             self._token, self._token_expires = None, 0.0
             await self._ensure_token()
             r = await self._http.get(path, headers=self._headers())

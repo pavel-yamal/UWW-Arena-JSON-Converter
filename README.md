@@ -68,7 +68,7 @@ vMix не теряет привязки.
 | Текущий турнир | `GET /api/json/arena/current-event` (или `ARENA_EVENT_ID`) |
 | Ковры турнира | `GET /api/json/mat/{sportEventId}` (запасной: `/scoreboard/mat/{sportEventId}`) |
 | Открытая схватка на ковре | `GET /api/json/scoreboard/fight/open/{sportEventMatId}` (запасной: `/fight/open/{id}`) |
-| Авторизация | OAuth2 `client_credentials`, `POST {ARENA_TOKEN_PATH}` → `Bearer` |
+| Авторизация | `POST /oauth/v2/token`, grant `https://arena.uww.io/grants/api_key` (`api_key`, `client_id`, `client_secret`, scope `read`) → `Bearer` — как в официальном [oauth2-arena](https://github.com/unitedworldwrestling/oauth2-arena). Без `ARENA_API_KEY` — `client_credentials` |
 
 `{_format}` в путях спецификации = `json`.
 
@@ -93,7 +93,7 @@ vMix не теряет привязки.
 
 ## Переменные окружения
 
-См. `.env.example`. Главное: `ARENA_URL`, `ARENA_CLIENT_ID`/`ARENA_CLIENT_SECRET` (или `ARENA_API_TOKEN`),
+См. `.env.example`. Главное: `ARENA_URL`, `ARENA_CLIENT_ID`/`ARENA_CLIENT_SECRET`/`ARENA_API_KEY` (или `ARENA_API_TOKEN`),
 `ARENA_EVENT_ID`, `MATS`, `POLL_INTERVAL`, `TIMER_UNIT` (`s`/`ms`), `MAPPING_FILE`, `ENABLE_RAW`.
 
 ## Тесты

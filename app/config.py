@@ -19,6 +19,13 @@ class Settings:
     arena_token_path: str = field(default_factory=lambda: os.getenv("ARENA_TOKEN_PATH", "/oauth/v2/token"))
     arena_client_id: str = field(default_factory=lambda: os.getenv("ARENA_CLIENT_ID", ""))
     arena_client_secret: str = field(default_factory=lambda: os.getenv("ARENA_CLIENT_SECRET", ""))
+    # api_key grant (official Arena OAuth client); empty -> client_credentials
+    arena_api_key: str = field(default_factory=lambda: os.getenv("ARENA_API_KEY", ""))
+    arena_grant_type: str = field(
+        default_factory=lambda: os.getenv("ARENA_GRANT_TYPE")
+        or ("https://arena.uww.io/grants/api_key" if os.getenv("ARENA_API_KEY") else "client_credentials")
+    )
+    arena_scope: str = field(default_factory=lambda: os.getenv("ARENA_SCOPE", "read"))
     arena_api_token: str = field(default_factory=lambda: os.getenv("ARENA_API_TOKEN", ""))
     arena_verify_tls: bool = field(default_factory=lambda: _bool("ARENA_VERIFY_TLS", True))
     # Empty -> take /arena/current-event
