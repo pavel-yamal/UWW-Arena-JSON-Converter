@@ -96,6 +96,7 @@ def test_timer_format():
 def test_flat_all_mats_one_row(mocked):
     asyncio.run(main.refresh_once())
     (row,) = asyncio.run(main.vmix_flat())
+    assert row["arena_ok"] is True
     assert row["A_red_name"] == "IVANOV Ivan" and row["A_timer"] == "1:35"
     assert row["B_has_fight"] is False
     (row,) = asyncio.run(main.vmix_flat(key="index"))

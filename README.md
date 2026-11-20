@@ -8,35 +8,35 @@
 ```bash
 cp .env.example .env      # указать ARENA_URL, ключи OAuth, при необходимости ARENA_EVENT_ID / MATS
 docker compose up -d --build
-curl http://localhost:8000/status
+curl http://localhost:8090/status
 ```
 
-В vMix: **Data Sources → Add → JSON**, URL `http://<хост>:8000/vmix` (все ковры, строка = ковёр)
-или `http://<хост>:8000/vmix/mat/A` (один ковёр). Интервал обновления — 1 с.
+Сервис сам постоянно опрашивает Arena (раз в `POLL_INTERVAL`, по умолчанию 1 с) и держит готовый документ.
 
-**Все ковры в одном источнике, одной строкой:** `http://<хост>:8000/vmix/flat`.
-Поля получают префикс ковра: `A_red_name`, `A_timer`, `B_blue_score`, `C_winner_name` …
-Каждое поле титра привязывается к своему столбцу, строку переключать не нужно.
-`/vmix/flat?key=index` даёт префиксы по порядку: `mat1_…`, `mat2_…`.
-Если имя ковра — число, префикс `mat1_`, `mat2_`.
+В vMix: **Data Sources → Add → JSON**, URL **`http://<хост>:8090/vmix`**, интервал 1 с.
+Это **один источник, одна строка**: все ковры в одном документе, поля с префиксом ковра —
+`A_red_name`, `A_timer`, `B_blue_score`, `C_winner_name` … Каждое поле титра привязывается к своему столбцу.
+
+- `VMIX_KEY=index` (или `/vmix?key=index`) — префиксы по порядку: `mat1_…`, `mat2_…`.
+- Если имя ковра — число, префикс `mat1_`, `mat2_`.
+- `arena_ok` — `false`, если последний опрос Arena не удался (отдаются последние полученные данные).
+- `/vmix/rows` — те же данные по строке на ковёр, `/vmix/mat/A` — один ковёр.
 
 ## Формат ответа `/vmix`
 
 ```json
 [{
-  "mat": "A", "mat_id": "…", "has_fight": true,
-  "fight_number": 12, "fight_round": "", "status": 3, "period": 2,
-  "timer": "1:35",
-  "weight_category": "FS 65 kg", "weight": 65, "sport": "",
-  "red_name": "IVANOV Ivan", "red_last_name": "", "red_first_name": "",
-  "red_country": "AIN", "red_country_name": "…", "red_flag": "AIN.png", "red_score": 7, "red_cp": 0,
-  "blue_name": "SMITH John", "blue_country": "USA", "blue_score": 3, "…": "…",
-  "winner_side": "red", "winner_name": "IVANOV Ivan", "winner_country": "AIN",
-  "victory_type": "VPO1"
+  "updated_at": 1763637852.4, "arena_ok": true,
+  "A_mat": "A", "A_has_fight": true, "A_fight_number": 12, "A_period": 2,
+  "A_timer": "1:35", "A_weight_category": "FS 65 kg",
+  "A_red_name": "IVANOV Ivan", "A_red_country": "AIN", "A_red_flag": "AIN.png", "A_red_score": 7,
+  "A_blue_name": "SMITH John", "A_blue_country": "USA", "A_blue_score": 3,
+  "A_winner_side": "red", "A_winner_name": "IVANOV Ivan", "A_victory_type": "VPO1",
+  "B_mat": "B", "B_has_fight": false, "B_timer": "", "B_red_name": "", "…": "…"
 }]
 ```
 
-Набор полей всегда одинаковый, даже если на ковре нет схватки (`has_fight: false`, поля пустые) —
+Набор полей ковра всегда одинаковый, даже если на нём нет схватки (`X_has_fight: false`, поля пустые) —
 vMix не теряет привязки.
 
 ## Какие методы Arena используются

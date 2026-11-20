@@ -32,5 +32,7 @@ class Settings:
     mapping_file: str = field(default_factory=lambda: os.getenv("MAPPING_FILE", ""))
     # seconds | ms — unit of a numeric timer value coming from Arena
     timer_unit: str = field(default_factory=lambda: os.getenv("TIMER_UNIT", "s"))
+    # Prefix of /vmix columns: name (A_red_name) | index (mat1_red_name)
+    vmix_key: str = field(default_factory=lambda: os.getenv("VMIX_KEY", "name"))
     # Enable /raw passthrough for inspecting real Arena responses
     enable_raw: bool = field(default_factory=lambda: _bool("ENABLE_RAW", True))
