@@ -87,9 +87,9 @@ vMix не теряет привязки.
 { "timer": ["fightClock.seconds"], "country": ["fighter{n}.athlete.team.alternateName"] }
 ```
 
-**Таймер.** Если в REST-ответе схватки нет живого времени (табло может передавать его только
-через Mercure — в API есть `/scoreboard/mercuretoken/{sportEvent}/{localClient}`), поле `timer`
-останется пустым. Тогда понадобится подписка на Mercure — пришлите пример `/raw/fight/...` во время схватки.
+**Таймер.** Если в REST-ответе схватки нет живого времени, поле `timer` будет стоять или прыгать —
+живое время табло Arena получает потоком через Mercure. Что это, почему так и как проверить —
+[docs/MERCURE.md](docs/MERCURE.md).
 
 ## Переменные окружения
 
