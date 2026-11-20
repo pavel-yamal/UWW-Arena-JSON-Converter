@@ -5,6 +5,7 @@ and keeps a normalized snapshot in memory; vMix polls this service.
 
 Endpoints
   GET /vmix                 all mats, one row per mat (vMix Data Source -> JSON)
+  GET /vmix/flat            all mats in ONE row, columns prefixed by mat (A_red_name)
   GET /vmix/mat/{mat}       one mat by name or id (array with one row)
   GET /status               poller state, last error
   GET /raw/mats             raw Arena mat list         (ENABLE_RAW=1)
@@ -16,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import time
 from typing import Any
 
@@ -102,6 +104,28 @@ app = FastAPI(title="UWW Arena -> vMix", lifespan=lifespan)
 @app.get("/vmix")
 async def vmix_all() -> list[dict]:
     return state.rows
+
+
+def _prefix(row: dict, index: int, key: str) -> str:
+    if key == "index":
+        return f"mat{index}"
+    name = re.sub(r"\W+", "_", str(row.get("mat") or index)).strip("_")
+    return f"mat{name}" if name[:1].isdigit() else name
+
+
+@app.get("/vmix/flat")
+async def vmix_flat(key: str = "name") -> list[dict]:
+    """All mats in ONE row: columns are prefixed with the mat (A_red_name, B_timer, …).
+
+    key=name  -> prefix from mat name ("A_", "B_", "mat1_" for numeric names)
+    key=index -> prefix by position ("mat1_", "mat2_", …)
+    """
+    flat: dict[str, Any] = {}
+    for i, row in enumerate(state.rows, start=1):
+        p = _prefix(row, i, key)
+        for k, v in row.items():
+            flat[f"{p}_{k}"] = v
+    return [flat]
 
 
 @app.get("/vmix/mat/{mat}")
