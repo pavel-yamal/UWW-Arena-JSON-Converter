@@ -1,0 +1,13 @@
+services:
+  arena-vmix:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    env_file: .env
+    # Свой mapping.json (MAPPING_FILE=/config/mapping.json):
+    # volumes:
+    #   - ./config:/config:ro
+    # Если Arena запущена на этом же хосте:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
